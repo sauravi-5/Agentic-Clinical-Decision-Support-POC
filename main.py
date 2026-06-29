@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import os
 import sys
+from fastapi.responses import JSONResponse
 
 # Force UTF-8 output encoding (fixes Unicode emoji errors on macOS/Windows)
 if sys.stdout.encoding != "utf-8":
@@ -52,6 +53,10 @@ async def analyze(request: AnalyzeRequest):
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.head("/")
+async def health():
+    return JSONResponse(content={})
 
 
 if __name__ == "__main__":
