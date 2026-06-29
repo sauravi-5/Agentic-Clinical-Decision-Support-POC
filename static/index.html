@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Clinical Decision Support | Cotiviti POC</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <header>
+    <div class="header-inner">
+      <div class="logo">COTIVITI <span>POC</span></div>
+      <div class="header-title">
+        <h1>Agentic Clinical Decision Support</h1>
+        <p>Multi-agent AI with Ethical Guardrails for Healthcare Payment Integrity</p>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <!-- Input Panel -->
+    <section class="input-panel">
+      <div class="panel-header">
+        <span class="panel-label">SCENARIO INPUT</span>
+      </div>
+      <div class="scenario-buttons" id="scenarioButtons"></div>
+      <textarea id="scenarioText" placeholder="Enter a clinical or payment scenario, or select one above..."></textarea>
+      <button id="analyzeBtn" onclick="analyze()">
+        <span id="btnText">Run Agent Pipeline</span>
+        <span id="btnSpinner" class="spinner hidden"></span>
+      </button>
+    </section>
+
+    <!-- Pipeline Visualization -->
+    <section class="pipeline-section hidden" id="pipelineSection">
+      <div class="pipeline-track">
+        <div class="pipeline-node" id="node1" data-label="Agent 1">
+          <div class="node-icon">&#x2695;</div>
+          <div class="node-name">Clinical Classifier</div>
+          <div class="node-status idle">Waiting</div>
+        </div>
+        <div class="pipeline-arrow">&#8594;</div>
+        <div class="pipeline-node" id="node2" data-label="Agent 2">
+          <div class="node-icon">&#x1F4CB;</div>
+          <div class="node-name">Policy Retrieval</div>
+          <div class="node-status idle">Waiting</div>
+        </div>
+        <div class="pipeline-arrow">&#8594;</div>
+        <div class="pipeline-node" id="node3" data-label="Agent 3">
+          <div class="node-icon">&#x1F9E0;</div>
+          <div class="node-name">Decision Reasoning</div>
+          <div class="node-status idle">Waiting</div>
+        </div>
+        <div class="pipeline-arrow">&#8594;</div>
+        <div class="pipeline-node" id="node4" data-label="Agent 4">
+          <div class="node-icon">&#x2696;</div>
+          <div class="node-name">Governance Review</div>
+          <div class="node-status idle">Waiting</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Results -->
+    <section class="results hidden" id="results">
+
+      <!-- Final Recommendation Banner -->
+      <div class="recommendation-banner" id="recBanner">
+        <div class="rec-left">
+          <div class="rec-label">FINAL RECOMMENDATION</div>
+          <div class="rec-value" id="recValue">—</div>
+          <div class="rec-sub" id="recSub"></div>
+        </div>
+        <div class="rec-right">
+          <div class="confidence-ring">
+            <svg viewBox="0 0 80 80">
+              <circle cx="40" cy="40" r="34" class="ring-bg" />
+              <circle cx="40" cy="40" r="34" class="ring-fill" id="confidenceRing" />
+            </svg>
+            <div class="confidence-label" id="confidenceLabel">0%</div>
+          </div>
+          <div class="confidence-text">Confidence</div>
+        </div>
+      </div>
+
+      <!-- Agent Cards -->
+      <div class="cards-grid">
+
+        <!-- Agent 1: Classification -->
+        <div class="card" id="card1">
+          <div class="card-header">
+            <span class="agent-badge">Agent 1</span>
+            <span class="card-title">Clinical & Claim Classification</span>
+          </div>
+          <div class="card-body" id="classificationBody"></div>
+        </div>
+
+        <!-- Agent 2: Policy Retrieval -->
+        <div class="card" id="card2">
+          <div class="card-header">
+            <span class="agent-badge">Agent 2</span>
+            <span class="card-title">Policy Retrieval (RAG)</span>
+          </div>
+          <div class="card-body" id="policyBody"></div>
+        </div>
+
+        <!-- Agent 3: Reasoning -->
+        <div class="card full-width" id="card3">
+          <div class="card-header">
+            <span class="agent-badge">Agent 3</span>
+            <span class="card-title">Decision Support & Reasoning</span>
+          </div>
+          <div class="card-body" id="reasoningBody"></div>
+        </div>
+
+        <!-- Agent 4: Governance -->
+        <div class="card full-width" id="card4">
+          <div class="card-header">
+            <span class="agent-badge">Agent 4</span>
+            <span class="card-title">Governance & Ethics Review</span>
+          </div>
+          <div class="card-body" id="governanceBody"></div>
+        </div>
+
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <p>Proof of Concept — Cotiviti Intern Assessment | Built with FastAPI + Anthropic Claude + FAISS RAG</p>
+  </footer>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
