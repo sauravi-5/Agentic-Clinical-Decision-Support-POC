@@ -27,7 +27,6 @@ def _build_index():
         _index = faiss.IndexFlatL2(dim)
         _index.add(embeddings)
     except ImportError:
-        # Fallback: keyword-based retrieval if deps unavailable
         _index = "keyword"
 
 
@@ -50,21 +49,43 @@ def retrieve(query: str, top_k: int = 3) -> list[dict]:
             results.append({
                 "source": _docs[idx]["source"],
                 "text": _docs[idx]["text"],
-                "score": float(1 / (1 + dist)),  # convert L2 distance to similarity-ish score
+                "score": float(1 / (1 + dist)),
             })
     return results
 
 
 def _keyword_retrieve(query: str, top_k: int) -> list[dict]:
-    """Simple TF-IDF-style keyword fallback."""
-    query_words = set(query.lower().split())
+    import math
+    docs = _docs
+    N = len(docs)
+
+    def tokenize(text):
+        return text.lower().split()
+
+    # Build IDF
+    df: dict[str, int] = {}
+    for doc in docs:
+        for w in set(tokenize(doc["text"])):
+            df[w] = df.get(w, 0) + 1
+    idf = {w: math.log(N / freq) for w, freq in df.items()}
+
+    # Score each doc with TF-IDF
+    query_words = tokenize(query)
     scored = []
-    for doc in _docs:
-        doc_words = set(doc["text"].lower().split())
-        overlap = len(query_words & doc_words)
-        scored.append((overlap, doc))
+    for doc in docs:
+        doc_words = tokenize(doc["text"])
+        freq: dict[str, int] = {}
+        for w in doc_words:
+            freq[w] = freq.get(w, 0) + 1
+        total = len(doc_words) or 1
+        score = sum(
+            (freq[w] / total) * idf.get(w, 0.0)
+            for w in query_words if w in freq
+        )
+        scored.append((score, doc))
+
     scored.sort(key=lambda x: x[0], reverse=True)
     return [
-        {"source": d["source"], "text": d["text"], "score": score / max(len(query_words), 1)}
+        {"source": d["source"], "text": d["text"], "score": round(score, 4)}
         for score, d in scored[:top_k]
     ]
