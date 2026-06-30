@@ -158,7 +158,19 @@ button#analyzeBtn:disabled { opacity: 0.6; cursor: not-allowed; }
   border-color: var(--pass);
   background: #ECFDF5;
 }
-.node-icon  { font-size: 1.5rem; }
+.node-icon  {
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  color: #fff;
+  background: var(--brand);
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
 .node-name  { font-size: 0.78rem; font-weight: 600; text-align: center; color: var(--text); }
 .node-status {
   font-size: 0.7rem;
@@ -187,6 +199,8 @@ button#analyzeBtn:disabled { opacity: 0.6; cursor: not-allowed; }
 .rec-label { font-size: 0.7rem; font-weight: 700; letter-spacing: 1.5px; opacity: 0.8; }
 .rec-value { font-size: 1.5rem; font-weight: 800; margin: 4px 0; }
 .rec-sub   { font-size: 0.82rem; opacity: 0.85; max-width: 480px; }
+
+.gov-check-status { letter-spacing: 0.3px; }
 
 .rec-right { display: flex; flex-direction: column; align-items: center; gap: 4px; }
 .confidence-ring { position: relative; width: 80px; height: 80px; }

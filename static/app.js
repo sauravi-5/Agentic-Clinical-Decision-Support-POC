@@ -27,7 +27,7 @@ function setNode(id, state) {
   const status = node.querySelector(".node-status");
   node.className = `pipeline-node ${state}`;
   status.className = `node-status ${state}`;
-  const labels = { idle: "Waiting", active: "Running…", done: "Complete" };
+  const labels = { idle: "Waiting", active: "Running", done: "Complete" };
   status.textContent = labels[state] || state;
 }
 
@@ -76,7 +76,7 @@ function renderPolicies(data) {
   const el = document.getElementById("policyBody");
   el.innerHTML = data.retrieved_policies.map(p => `
     <div class="policy-item">
-      <div class="policy-source">📄 ${p.source}</div>
+      <div class="policy-source">${p.source}</div>
       <div class="policy-excerpt">${p.excerpt}</div>
       <div class="policy-score">Relevance: ${Math.round(p.relevance_score * 100)}%</div>
     </div>
@@ -104,7 +104,7 @@ function renderReasoning(data) {
     <div class="section-label">SUPPORTING EVIDENCE</div>
     <ul class="evidence-list">${evidence}</ul>
     <div class="section-label">EVIDENCE GAPS</div>
-    <ul class="gap-list">${gaps}</ul>
+    <ul class="gap-list">${gaps || "<li>None identified</li>"}</ul>
     <div class="section-label">RATIONALE</div>
     <p style="font-size:0.87rem;line-height:1.6;color:var(--text)">${data.rationale}</p>
   `;
@@ -123,7 +123,7 @@ function renderGovernance(data) {
   const checks = Object.entries(data.governance_checks || {}).map(([key, val]) => `
     <div class="gov-check ${val.status}">
       <div class="gov-check-name">${checkNames[key] || key}</div>
-      <div class="gov-check-status">${val.status === "Pass" ? "✓ Pass" : val.status === "Warning" ? "⚠ Warning" : "✗ Fail"}</div>
+      <div class="gov-check-status">${val.status}</div>
       <div class="gov-check-finding">${val.finding}</div>
     </div>
   `).join("");
@@ -133,7 +133,6 @@ function renderGovernance(data) {
   ).join(" ");
 
   const reviewClass = data.human_review_required ? "required" : "not-required";
-  const reviewIcon  = data.human_review_required ? "👤" : "✅";
   const reviewTitle = data.human_review_required ? "Human Review Required" : "No Human Review Required";
 
   el.innerHTML = `
@@ -145,7 +144,6 @@ function renderGovernance(data) {
     ` : ""}
     <div class="section-label">OVERSIGHT DETERMINATION</div>
     <div class="human-review-box ${reviewClass}">
-      <span class="review-icon">${reviewIcon}</span>
       <div>
         <div class="review-title">${reviewTitle}</div>
         <div class="review-reason">${data.human_review_reason || data.governance_summary || ""}</div>
@@ -154,22 +152,28 @@ function renderGovernance(data) {
   `;
 }
 
+function riskBadgeColor(risk) {
+  if (risk === "Low") return "var(--pass)";
+  if (risk === "High") return "var(--danger)";
+  return "var(--warn)";
+}
+
 function renderBanner(result) {
   document.getElementById("recValue").textContent = result.final_recommendation;
-  document.getElementById("recSub").textContent = result.human_review_required
-    ? `⚠ Human review required — ${result.human_review_reason}`
-    : "✓ Sufficient confidence for automated processing";
+  const riskText = result.overall_risk ? ` · Risk: ${result.overall_risk}` : "";
+  document.getElementById("recSub").textContent = (result.human_review_required
+    ? `Human review required — ${result.human_review_reason}`
+    : `No human review required — ${result.human_review_reason}`) + riskText;
   setConfidence(result.confidence);
 }
 
-/* ── Main Analyze Flow ─────────────────────────────────────── */
+/* ── Main Analyze Flow (SSE streaming with real per-agent status) ── */
 async function analyze() {
   const scenario = document.getElementById("scenarioText").value.trim();
   if (!scenario) return alert("Please enter or select a scenario.");
 
-  // UI reset
   const btn = document.getElementById("analyzeBtn");
-  document.getElementById("btnText").textContent = "Running Pipeline…";
+  document.getElementById("btnText").textContent = "Running Pipeline";
   document.getElementById("btnSpinner").classList.remove("hidden");
   btn.disabled = true;
 
@@ -177,41 +181,59 @@ async function analyze() {
   document.getElementById("results").classList.add("hidden");
   resetNodes();
 
-  // Only mark Agent 1 as active immediately — rest wait for real data
-  setNode(1, "active");
-
   try {
-    const res = await fetch("/analyze", {
+    const res = await fetch("/analyze-stream", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ scenario }),
     });
 
-    if (!res.ok) {
-      const err = await res.json();
-      throw new Error(err.detail || "Pipeline failed");
+    if (!res.ok || !res.body) {
+      throw new Error("Pipeline request failed.");
     }
 
-    const result = await res.json();
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    let finalResult = null;
 
-    // Step through nodes sequentially with short visual delays
-    // so the pipeline animation feels earned rather than fake
-    const stepDelay = ms => new Promise(r => setTimeout(r, ms));
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
 
-    setNode(1, "done"); setNode(2, "active");
-    await stepDelay(400);
-    setNode(2, "done"); setNode(3, "active");
-    await stepDelay(400);
-    setNode(3, "done"); setNode(4, "active");
-    await stepDelay(400);
-    setNode(4, "done");
+      buffer += decoder.decode(value, { stream: true });
+      const events = buffer.split("\n\n");
+      buffer = events.pop(); // keep incomplete chunk
 
-    // Render results
-    renderBanner(result);
-    renderClassification(result.agents.classification);
-    renderPolicies(result.agents.policy_retrieval);
-    renderReasoning(result.agents.reasoning);
-    renderGovernance(result.agents.governance);
+      for (const chunk of events) {
+        if (!chunk.trim()) continue;
+        const lines = chunk.split("\n");
+        const eventLine = lines.find(l => l.startsWith("event:"));
+        const dataLine = lines.find(l => l.startsWith("data:"));
+        if (!eventLine || !dataLine) continue;
+
+        const eventType = eventLine.replace("event:", "").trim();
+        const payload = JSON.parse(dataLine.replace("data:", "").trim());
+
+        if (eventType === "agent_start") {
+          setNode(payload.agent, "active");
+        } else if (eventType === "agent_done") {
+          setNode(payload.agent, "done");
+        } else if (eventType === "error") {
+          throw new Error(payload.message);
+        } else if (eventType === "complete") {
+          finalResult = payload;
+        }
+      }
+    }
+
+    if (!finalResult) throw new Error("Pipeline did not return a result.");
+
+    renderBanner(finalResult);
+    renderClassification(finalResult.agents.classification);
+    renderPolicies(finalResult.agents.policy_retrieval);
+    renderReasoning(finalResult.agents.reasoning);
+    renderGovernance(finalResult.agents.governance);
 
     document.getElementById("results").classList.remove("hidden");
     document.getElementById("results").scrollIntoView({ behavior: "smooth", block: "start" });
