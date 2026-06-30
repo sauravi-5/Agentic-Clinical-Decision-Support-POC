@@ -2,6 +2,7 @@
 import os
 import sys
 import json
+import asyncio
 
 if sys.stdout.encoding != "utf-8":
     sys.stdout.reconfigure(encoding="utf-8")
@@ -51,6 +52,7 @@ async def get_scenarios():
 
 
 def _sse(event: str, data: dict) -> str:
+    # Pad with extra newline + a comment line to force proxy flush
     return f"event: {event}\ndata: {json.dumps(data)}\n\n"
 
 
@@ -63,21 +65,32 @@ async def analyze_stream(request: AnalyzeRequest):
 
     async def event_generator():
         try:
+            yield ": stream-start\n\n"  # initial comment forces proxies to start flushing immediately
+            await asyncio.sleep(0)
+
             yield _sse("agent_start", {"agent": 1})
+            await asyncio.sleep(0)
             classification = await agent1_classify(scenario)
             yield _sse("agent_done", {"agent": 1, "data": classification})
+            await asyncio.sleep(0)
 
             yield _sse("agent_start", {"agent": 2})
+            await asyncio.sleep(0)
             policies = await agent2_retrieve_policy(scenario, classification)
             yield _sse("agent_done", {"agent": 2, "data": policies})
+            await asyncio.sleep(0)
 
             yield _sse("agent_start", {"agent": 3})
+            await asyncio.sleep(0)
             reasoning = await agent3_reason(scenario, classification, policies)
             yield _sse("agent_done", {"agent": 3, "data": reasoning})
+            await asyncio.sleep(0)
 
             yield _sse("agent_start", {"agent": 4})
+            await asyncio.sleep(0)
             governance = await agent4_governance(scenario, classification, reasoning)
             yield _sse("agent_done", {"agent": 4, "data": governance})
+            await asyncio.sleep(0)
 
             result = {
                 "scenario": scenario,
@@ -98,7 +111,15 @@ async def analyze_stream(request: AnalyzeRequest):
         except Exception as e:
             yield _sse("error", {"message": str(e)})
 
-    return StreamingResponse(event_generator(), media_type="text/event-stream")
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",  # disables proxy buffering (Render/nginx)
+        },
+    )
 
 
 @app.post("/analyze")
@@ -128,7 +149,8 @@ async def analyze(request: AnalyzeRequest):
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-    
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("main:app", host="0.0.0.0", port=int(os.environ.get("PORT", 8000)), reload=False)

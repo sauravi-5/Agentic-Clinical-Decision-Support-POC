@@ -217,8 +217,10 @@ async function analyze() {
 
         if (eventType === "agent_start") {
           setNode(payload.agent, "active");
+          await new Promise(r => requestAnimationFrame(r));
         } else if (eventType === "agent_done") {
           setNode(payload.agent, "done");
+          await new Promise(r => requestAnimationFrame(r));
         } else if (eventType === "error") {
           throw new Error(payload.message);
         } else if (eventType === "complete") {
